@@ -1,0 +1,43 @@
+// V0.3.1 FIX: replace the existing cross() and trimExtend() functions with this block.
+function raySegmentHit(origin, direction, a, b) {
+  const sx = b.x - a.x, sy = b.y - a.y;
+  const den = direction.x * sy - direction.y * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const qx = a.x - origin.x, qy = a.y - origin.y;
+  const t = (qx * sy - qy * sx) / den;
+  const u = (qx * direction.y - qy * direction.x) / den;
+  if (t < -1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
+  return { t, x: origin.x + t * direction.x, y: origin.y + t * direction.y };
+}
+function trimExtend(mode) {
+  const o = selectedObj();
+  if (!o || o.type !== "line" || !o.points || o.points.length < 2) {
+    toast("Select a LINE object first"); return;
+  }
+  const end = (prompt("Endpoint A or B?", "B") || "B").toUpperCase() === "A" ? 0 : 1;
+  const base = o.points[end], other = o.points[1 - end];
+  const direction = mode === "trim"
+    ? { x: other.x - base.x, y: other.y - base.y }
+    : { x: base.x - other.x, y: base.y - other.y };
+
+  const hits = [];
+  objects.forEach((obj, i) => {
+    if (i === selected) return;
+    segments(obj).forEach(([a, b]) => {
+      const hit = raySegmentHit(base, direction, a, b);
+      if (hit && (mode !== "trim" || hit.t <= 1 + 1e-9)) hits.push(hit);
+    });
+  });
+  if (!hits.length) {
+    toast(mode === "trim" ? "No intersection on selected line" : "No boundary found to extend to");
+    return;
+  }
+  hits.sort((a, b) => a.t - b.t);
+  const h = hits[0];
+  saveState();
+  o.points[end] = { x: h.x, y: h.y };
+  draw();
+  toast(mode === "trim" ? "Trim complete" : "Extend complete");
+}
+$("trimBtn").onclick = () => trimExtend("trim");
+$("extendBtn").onclick = () => trimExtend("extend");

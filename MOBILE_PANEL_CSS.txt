@@ -1,0 +1,17 @@
+/* V0.3.1 mobile properties drawer */
+@media(max-width:760px){
+  .rightpanel{
+    display:block;
+    position:fixed;
+    z-index:20;
+    top:66px;
+    right:0;
+    bottom:0;
+    width:min(290px,82vw);
+    overflow-y:auto;
+    box-shadow:-5px 0 18px #0003;
+    transform:translateX(110%);
+    transition:transform .22s ease;
+  }
+  .rightpanel.open{transform:translateX(0)}
+}
