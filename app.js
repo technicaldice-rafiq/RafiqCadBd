@@ -1,84 +1,66 @@
 (()=>{"use strict";
-const canvas=document.getElementById("cad"),ctx=canvas.getContext("2d");
-const $=id=>document.getElementById(id);
+const $=id=>document.getElementById(id),canvas=$("cad"),ctx=canvas.getContext("2d");
 let objects=[],undoStack=[],redoStack=[],tool="select",layer="0",color="#183b68",lineWidth=2,grid=true,unit="m";
-let view={x:0,y:0,scale:35},draft=null,selected=-1,dragging=false,last=null,pan=false,polyPts=[],snapOn=false,orthoOn=false;
-const saveState=()=>{undoStack.push(JSON.stringify(objects));if(undoStack.length>80)undoStack.shift();redoStack=[]};
-const toast=m=>{let t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1800)};
-const resize=()=>{let r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=Math.max(1,Math.round(r.width*d));canvas.height=Math.max(1,Math.round(r.height*d));ctx.setTransform(d,0,0,d,0,0);draw()};
-const screenToWorld=(x,y)=>({x:(x-view.x)/view.scale,y:(y-view.y)/view.scale});
-const worldToScreen=p=>({x:p.x*view.scale+view.x,y:p.y*view.scale+view.y});
-function draftingPoint(p,base){let q={x:p.x,y:p.y};
- if(snapOn){let best=null,bd=10;objects.forEach(o=>(o.points||[]).forEach(v=>{let s=worldToScreen(v),d=Math.hypot(s.x-(p.x*view.scale+view.x),s.y-(p.y*view.scale+view.y));if(d<bd){bd=d;best=v}}));if(best)q={x:best.x,y:best.y}}
- if(orthoOn&&base){let dx=q.x-base.x,dy=q.y-base.y;if(Math.abs(dx)>=Math.abs(dy))q.y=base.y;else q.x=base.x}
- return q;
-}
-function draw(){let r=canvas.getBoundingClientRect(),w=r.width,h=r.height;ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
- if(grid){let step=view.scale;let major=step*5;if(step>7){ctx.beginPath();ctx.strokeStyle="#e8edf2";ctx.lineWidth=1;for(let x=((view.x%step)+step)%step;x<w;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=((view.y%step)+step)%step;y<h;y+=step){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke();ctx.beginPath();ctx.strokeStyle="#d4dde7";for(let x=((view.x%major)+major)%major;x<w;x+=major){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=((view.y%major)+major)%major;y<h;y+=major){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke()}}
- // axes
- let o=worldToScreen({x:0,y:0});ctx.strokeStyle="#9aa9b8";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(o.x,0);ctx.lineTo(o.x,h);ctx.moveTo(0,o.y);ctx.lineTo(w,o.y);ctx.stroke();
- objects.forEach((obj,i)=>drawObj(obj,i===selected));if(draft)drawObj(draft,true,true);
- updateArea();
-}
-function drawObj(o,sel=false,preview=false){ctx.save();ctx.strokeStyle=sel?"#e59e00":o.color||color;ctx.fillStyle=o.color||color;ctx.lineWidth=(o.width||lineWidth)+(sel?1.5:0);ctx.setLineDash(preview?[5,4]:[]);let pts=o.points||[];
- const p=pts.map(worldToScreen);
- ctx.beginPath();
- if(o.type==="line"||o.type==="dimension"){if(p.length>1){ctx.moveTo(p[0].x,p[0].y);ctx.lineTo(p[1].x,p[1].y)}}
- else if(o.type==="polyline"||o.type==="rectangle"){if(p.length){ctx.moveTo(p[0].x,p[0].y);p.slice(1).forEach(q=>ctx.lineTo(q.x,q.y));if(o.closed||o.type==="rectangle")ctx.closePath()}}
- else if(o.type==="circle"&&p.length){let rad=Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y);ctx.arc(p[0].x,p[0].y,rad,0,Math.PI*2)}
- else if(o.type==="arc"&&p.length>2){let c=p[0],a=Math.atan2(p[1].y-c.y,p[1].x-c.x),b=Math.atan2(p[2].y-c.y,p[2].x-c.x),rad=Math.hypot(p[1].x-c.x,p[1].y-c.y);ctx.arc(c.x,c.y,rad,a,b)}
- if(o.type==="text"&&p.length){ctx.font=`${Math.max(12,(o.height||0.5)*view.scale)}px Arial`;ctx.fillText(o.text||"Text",p[0].x,p[0].y)}
- else{ctx.stroke();if(o.type==="dimension"&&p.length>1){let len=dist(pts[0],pts[1]);ctx.font="12px Arial";ctx.fillText(len.toFixed(2)+" "+unit,(p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2-7)}}
- if(sel&&p.length){ctx.fillStyle="#e59e00";p.forEach(q=>{ctx.fillRect(q.x-3,q.y-3,6,6)})}ctx.restore()}
-function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
-function pointer(e){let r=canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
-function nearest(pt){let best=-1,bd=12;objects.forEach((o,i)=>(o.points||[]).forEach(p=>{let q=worldToScreen(p),d=Math.hypot(q.x-pt.x,q.y-pt.y);if(d<bd){bd=d;best=i}}));return best}
-function hit(pt){for(let i=objects.length-1;i>=0;i--){let o=objects[i],ps=o.points||[];if(ps.some(p=>{let q=worldToScreen(p);return Math.hypot(q.x-pt.x,q.y-pt.y)<14}))return i;if(ps.length>=2){for(let j=1;j<ps.length;j++){let a=worldToScreen(ps[j-1]),b=worldToScreen(ps[j]),dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((pt.x-a.x)*dx+(pt.y-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(pt.x-a.x-t*dx,pt.y-a.y-t*dy);if(d<9)return i}}}return -1}
+let view={x:0,y:0,scale:35},draft=null,selected=-1,dragging=false,last=null,pan=false,snapOn=false,orthoOn=false;
+const clone=x=>JSON.parse(JSON.stringify(x)),saveState=()=>{undoStack.push(JSON.stringify(objects));if(undoStack.length>80)undoStack.shift();redoStack=[]};
+const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1800)};
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),area=p=>Math.abs(p.reduce((s,v,i)=>{let q=p[(i+1)%p.length];return s+v.x*q.y-q.x*v.y},0)/2);
+const stp=(x,y)=>({x:(x-view.x)/view.scale,y:(y-view.y)/view.scale}),wts=p=>({x:p.x*view.scale+view.x,y:p.y*view.scale+view.y});
+function resize(){let r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=Math.max(1,r.width*d);canvas.height=Math.max(1,r.height*d);ctx.setTransform(d,0,0,d,0,0);draw()}
+function draftPoint(p,base){let q={...p};if(snapOn){let best=null,bd=11;objects.forEach(o=>(o.points||[]).forEach(v=>{let s=wts(v),d=dist(s,p);if(d<bd){bd=d;best=v}}));if(best)q={...best}}if(orthoOn&&base){if(Math.abs(q.x-base.x)>=Math.abs(q.y-base.y))q.y=base.y;else q.x=base.x}return q}
+function drawObj(o,sel=false,preview=false){let p=(o.points||[]).map(wts);ctx.save();ctx.strokeStyle=sel?"#e59e00":o.color||color;ctx.fillStyle=o.color||color;ctx.lineWidth=(o.width||lineWidth)+(sel?1.5:0);ctx.setLineDash(preview?[5,4]:[]);ctx.beginPath();
+if(o.type==="line"||o.type==="dimension"){if(p.length>1){ctx.moveTo(p[0].x,p[0].y);ctx.lineTo(p[1].x,p[1].y)}}
+else if(o.type==="polyline"||o.type==="rectangle"){if(p.length){ctx.moveTo(p[0].x,p[0].y);p.slice(1).forEach(q=>ctx.lineTo(q.x,q.y));if(o.closed||o.type==="rectangle")ctx.closePath()}}
+else if(o.type==="circle"&&p.length>1)ctx.arc(p[0].x,p[0].y,dist(p[0],p[1]),0,Math.PI*2);
+else if(o.type==="arc"&&p.length>2){let a=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x),b=Math.atan2(p[2].y-p[0].y,p[2].x-p[0].x);ctx.arc(p[0].x,p[0].y,dist(p[0],p[1]),a,b)}
+if(o.type==="text"&&p.length){ctx.font=`${Math.max(12,(o.height||.5)*view.scale)}px Arial`;ctx.fillText(o.text||"Text",p[0].x,p[0].y)}else{ctx.stroke();if(o.type==="dimension"&&p.length>1){ctx.font="12px Arial";ctx.fillText(dist(o.points[0],o.points[1]).toFixed(2)+" "+unit,(p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2-7)}}
+if(sel)p.forEach(q=>{ctx.fillStyle="#e59e00";ctx.fillRect(q.x-3,q.y-3,6,6)});ctx.restore()}
+function draw(){let w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
+if(grid&&view.scale>7){let z=view.scale*5;ctx.strokeStyle="#e8edf2";ctx.lineWidth=1;ctx.beginPath();for(let x=((view.x%view.scale)+view.scale)%view.scale;x<w;x+=view.scale){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=((view.y%view.scale)+view.scale)%view.scale;y<h;y+=view.scale){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke();ctx.strokeStyle="#d4dde7";ctx.beginPath();for(let x=((view.x%z)+z)%z;x<w;x+=z){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=((view.y%z)+z)%z;y<h;y+=z){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke()}
+let o=wts({x:0,y:0});ctx.strokeStyle="#aab6c3";ctx.beginPath();ctx.moveTo(o.x,0);ctx.lineTo(o.x,h);ctx.moveTo(0,o.y);ctx.lineTo(w,o.y);ctx.stroke();objects.forEach((v,i)=>drawObj(v,i===selected));if(draft)drawObj(draft,true,true);updateInfo()}
+function pointer(e){let r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function hit(pt){for(let i=objects.length-1;i>=0;i--){let o=objects[i],p=o.points||[];if(p.some(v=>dist(wts(v),pt)<14))return i;let segs=segments(o);for(let [a,b] of segs){a=wts(a);b=wts(b);let dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((pt.x-a.x)*dx+(pt.y-a.y)*dy)/(dx*dx+dy*dy||1)));if(dist(pt,{x:a.x+t*dx,y:a.y+t*dy})<9)return i}}return -1}
+function segments(o){let p=o.points||[],s=[];for(let i=1;i<p.length;i++)s.push([p[i-1],p[i]]);if((o.closed||o.type==="rectangle")&&p.length>2)s.push([p[p.length-1],p[0]]);return s}
 function setTool(t){tool=t;document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("active",b.dataset.tool===t));$("toolStatus").textContent=t.toUpperCase();toast("Tool: "+t)}
-document.querySelectorAll(".tool").forEach(b=>b.addEventListener("click",()=>setTool(b.dataset.tool)));
-canvas.addEventListener("pointerdown",e=>{canvas.setPointerCapture(e.pointerId);let s=pointer(e),w=draftingPoint(screenToWorld(s.x,s.y),draft?.points?.[draft.points.length-1]);$("coord").textContent=`X: ${w.x.toFixed(2)} · Y: ${(-w.y).toFixed(2)}`;
- if(e.button===1||e.shiftKey){pan=true;last=s;return}
- if(tool==="select"){selected=hit(s);if(selected>=0){saveState();dragging=true;last=w}else{pan=true;last=s}draw();return}
- if(tool==="delete"){let i=hit(s);if(i>=0){saveState();objects.splice(i,1);selected=-1;draw();toast("Object deleted")}return}
- if(tool==="polyline"){if(!draft){draft={type:"polyline",points:[w],color,layer,width:lineWidth};polyPts=[w]}else{draft.points.push(w);polyPts.push(w)}draw();return}
- if(tool==="text"){let txt=prompt("Enter drawing text:","Plot No.");if(txt){saveState();objects.push({type:"text",points:[w],text:txt,color,layer,height:.45,width:lineWidth});draw()}return}
- if(tool==="line"||tool==="rectangle"||tool==="circle"||tool==="dimension"){draft={type:tool,points:[w],color,layer,width:lineWidth};draw();return}
- if(tool==="arc"){if(!draft)draft={type:"arc",points:[w],color,layer,width:lineWidth};else if(draft.points.length<3){draft.points.push(w);if(draft.points.length===3){saveState();objects.push(draft);draft=null}}draw()}
+document.querySelectorAll(".tool").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+canvas.addEventListener("pointerdown",e=>{canvas.setPointerCapture(e.pointerId);let s=pointer(e),p=draftPoint(stp(s.x,s.y),draft?.points?.at(-1));$("coord").textContent=`X: ${p.x.toFixed(2)} · Y: ${(-p.y).toFixed(2)}`;
+if(e.button===1||e.shiftKey){pan=true;last=s;return}
+if(tool==="select"){selected=hit(s);if(selected>=0){saveState();dragging=true;last=p}else{pan=true;last=s}draw();return}
+if(tool==="delete"){let i=hit(s);if(i>=0){saveState();objects.splice(i,1);selected=-1;draw()}return}
+if(tool==="polyline"){if(!draft)draft={type:"polyline",points:[p],color,layer,width:lineWidth};else draft.points.push(p);draw();return}
+if(tool==="text"){let t=prompt("Drawing text:","Plot No.");if(t){saveState();objects.push({type:"text",points:[p],text:t,color,layer,width:lineWidth,height:.5});draw()}return}
+if(["line","rectangle","circle","dimension"].includes(tool)){draft={type:tool,points:[p],color,layer,width:lineWidth};draw();return}
+if(tool==="arc"){if(!draft)draft={type:"arc",points:[p],color,layer,width:lineWidth};else{draft.points.push(p);if(draft.points.length===3){saveState();objects.push(draft);draft=null}}draw()}
 });
-canvas.addEventListener("pointermove",e=>{let s=pointer(e),w=draftingPoint(screenToWorld(s.x,s.y),draft?.points?.[draft.points.length-1]);$("coord").textContent=`X: ${w.x.toFixed(2)} · Y: ${(-w.y).toFixed(2)}`;
- if(pan&&last){view.x+=s.x-last.x;view.y+=s.y-last.y;last=s;draw();return}
- if(dragging&&selected>=0&&last){let o=objects[selected],dx=w.x-last.x,dy=w.y-last.y;o.points=o.points.map(p=>({x:p.x+dx,y:p.y+dy}));last=w;draw();return}
- if(draft&&["line","rectangle","circle","dimension"].includes(draft.type)){if(draft.points.length===1){draft.points[1]=w;draw()}}
-});
-canvas.addEventListener("pointerup",e=>{let s=pointer(e),w=draftingPoint(screenToWorld(s.x,s.y),draft?.points?.[draft.points.length-1]);if(pan){pan=false;last=null;return}if(dragging){dragging=false;last=null;draw();return}if(draft&&["line","rectangle","circle","dimension"].includes(draft.type)){draft.points[1]=w;if(draft.type==="rectangle"){let a=draft.points[0],b=w;draft.points=[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}];draft.closed=true}saveState();objects.push(draft);draft=null;draw()}});
-canvas.addEventListener("dblclick",()=>{if(draft&&draft.type==="polyline"){saveState();draft.closed=true;objects.push(draft);draft=null;polyPts=[];draw();toast("Polyline closed")}});
-canvas.addEventListener("wheel",e=>{e.preventDefault();let s=pointer(e),before=screenToWorld(s.x,s.y),factor=e.deltaY<0?1.12:.89;view.scale=Math.max(3,Math.min(250,view.scale*factor));let after=worldToScreen(before);view.x+=s.x-after.x;view.y+=s.y-after.y;draw()},{passive:false});
-function updateArea(){if(selected>=0&&objects[selected]?.type==="polyline"&&objects[selected].closed){let a=polygonArea(objects[selected].points);$("areaInfo").textContent=`Area: ${a.toFixed(3)} sq ${unit} · ${(a/4046.856).toFixed(4)} acre · ${(a/40.46856).toFixed(3)} শতক`}else $("areaInfo").textContent="Select a closed polyline to calculate area."}
-function polygonArea(p){let s=0;for(let i=0;i<p.length;i++){let q=p[(i+1)%p.length];s+=p[i].x*q.y-q.x*p[i].y}return Math.abs(s/2)}
-$("closePolyBtn").onclick=()=>{if(draft?.type==="polyline"&&draft.points.length>=3){saveState();draft.closed=true;objects.push(draft);draft=null;draw();toast("Boundary closed")}else toast("Draw at least 3 polyline points first")};
-$("color").oninput=e=>color=e.target.value;$("lineWidth").onchange=e=>lineWidth=Math.max(1,Math.min(12,+e.target.value||2));$("layerSelect").onchange=e=>layer=e.target.value;$("unit").onchange=e=>{unit=e.target.value;draw()};$("gridBtn").onclick=()=>{grid=!grid;$("gridBtn").textContent=grid?"Grid ✓":"Grid ✕";draw()};
-$("snapBtn").onclick=()=>{snapOn=!snapOn;$("snapBtn").textContent=snapOn?"Snap ON":"Snap OFF";toast("Endpoint snap "+(snapOn?"on":"off"))};
-$("orthoBtn").onclick=()=>{orthoOn=!orthoOn;$("orthoBtn").textContent=orthoOn?"Ortho ON":"Ortho OFF";toast("Orthographic mode "+(orthoOn?"on":"off"))};
-window.addEventListener("keydown",e=>{if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
- if(e.key==="Escape"){draft=null;polyPts=[];setTool("select");draw()}
- if(e.key==="Delete"&&selected>=0){saveState();objects.splice(selected,1);selected=-1;draw();toast("Object deleted")}
- if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();saveLocal()}
- if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z")$("undoBtn").click();
- if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y")$("redoBtn").click();
-});
+canvas.addEventListener("pointermove",e=>{let s=pointer(e),p=draftPoint(stp(s.x,s.y),draft?.points?.at(-1));$("coord").textContent=`X: ${p.x.toFixed(2)} · Y: ${(-p.y).toFixed(2)}`;if(pan&&last){view.x+=s.x-last.x;view.y+=s.y-last.y;last=s;draw();return}if(dragging&&selected>=0&&last){let o=objects[selected],dx=p.x-last.x,dy=p.y-last.y;o.points=o.points.map(v=>({x:v.x+dx,y:v.y+dy}));last=p;draw();return}if(draft&&["line","rectangle","circle","dimension"].includes(draft.type)){draft.points[1]=p;draw()}});
+canvas.addEventListener("pointerup",e=>{let s=pointer(e),p=draftPoint(stp(s.x,s.y),draft?.points?.at(-1));if(pan){pan=false;last=null;return}if(dragging){dragging=false;last=null;draw();return}if(draft&&["line","rectangle","circle","dimension"].includes(draft.type)){draft.points[1]=p;if(draft.type==="rectangle"){let a=draft.points[0],b=p;draft.points=[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}];draft.closed=true}saveState();objects.push(draft);draft=null;draw()}});
+canvas.ondblclick=()=>{if(draft?.type==="polyline"&&draft.points.length>=3){saveState();draft.closed=true;objects.push(draft);draft=null;draw()}};
+canvas.addEventListener("wheel",e=>{e.preventDefault();let s=pointer(e),before=stp(s.x,s.y);view.scale=Math.max(3,Math.min(250,view.scale*(e.deltaY<0?1.12:.89)));let after=wts(before);view.x+=s.x-after.x;view.y+=s.y-after.y;draw()},{passive:false});
+function updateInfo(){if(selected>=0&&objects[selected]){$("selectionInfo").textContent=objects[selected].type+" · Layer "+(objects[selected].layer||"0")}else $("selectionInfo").textContent="No object selected";if(selected>=0&&objects[selected]?.closed){let a=area(objects[selected].points);$("areaInfo").textContent=`Area: ${a.toFixed(3)} sq ${unit} · ${(a/4046.856).toFixed(4)} acre · ${(a/40.46856).toFixed(3)} শতক`}else $("areaInfo").textContent="Select a closed polyline to calculate area."}
+$("closePolyBtn").onclick=()=>{if(draft?.type==="polyline"&&draft.points.length>=3){saveState();draft.closed=true;objects.push(draft);draft=null;draw()}else toast("Draw at least 3 points first")};
+$("color").oninput=e=>color=e.target.value;$("lineWidth").onchange=e=>lineWidth=Math.max(1,Math.min(12,+e.target.value||2));$("layerSelect").onchange=e=>layer=e.target.value;$("unit").onchange=e=>{unit=e.target.value;draw()};
+$("gridBtn").onclick=()=>{grid=!grid;$("gridBtn").textContent=grid?"Grid ✓":"Grid ✕";draw()};$("snapBtn").onclick=()=>{snapOn=!snapOn;$("snapBtn").textContent=snapOn?"Snap ON":"Snap OFF"};$("orthoBtn").onclick=()=>{orthoOn=!orthoOn;$("orthoBtn").textContent=orthoOn?"Ortho ON":"Ortho OFF"};
 $("undoBtn").onclick=()=>{if(undoStack.length){redoStack.push(JSON.stringify(objects));objects=JSON.parse(undoStack.pop());selected=-1;draw()}};$("redoBtn").onclick=()=>{if(redoStack.length){undoStack.push(JSON.stringify(objects));objects=JSON.parse(redoStack.pop());draw()}};
-$("fitBtn").onclick=()=>{if(!objects.length){view={x:canvas.clientWidth/2,y:canvas.clientHeight/2,scale:35};draw();return}let pts=objects.flatMap(o=>o.points||[]),xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);let pad=45;view.scale=Math.max(3,Math.min(180,Math.min((canvas.clientWidth-pad*2)/(maxx-minx||1),(canvas.clientHeight-pad*2)/(maxy-miny||1))));view.x=canvas.clientWidth/2-(minx+maxx)/2*view.scale;view.y=canvas.clientHeight/2-(miny+maxy)/2*view.scale;draw()};
-function project(){return {app:"RAFIQ LAND SURVEY CAD",version:1,unit,objects}}
-function saveLocal(){localStorage.setItem("rafiqCadDrawing",JSON.stringify(project()));toast("Drawing saved on this device")}
-function autoSave(){try{localStorage.setItem("rafiqCadDrawing",JSON.stringify(project()))}catch(e){}}
-$("saveBtn").onclick=saveLocal;
-$("newBtn").onclick=()=>{if(objects.length&&!confirm("Start a new drawing? Save current work first if needed."))return;saveState();objects=[];selected=-1;draft=null;view={x:canvas.clientWidth/2,y:canvas.clientHeight/2,scale:35};draw()};
-$("openBtn").onclick=()=>$("fileInput").click();
-$("fileInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let txt=await f.text();if(f.name.toLowerCase().endsWith(".dxf")){toast("DXF import is planned for the next engine module");return}let data=JSON.parse(txt);if(!Array.isArray(data.objects))throw Error();saveState();objects=data.objects;unit=data.unit||"m";$("unit").value=unit;selected=-1;$("fitBtn").click();toast("Drawing opened")}catch(err){toast("Could not open this file")}e.target.value=""};
-function dxf(){let out=["0","SECTION","2","HEADER","9","$INSUNITS","70",unit==="ft"?"2":unit==="mm"?"4":"6","0","ENDSEC","0","SECTION","2","ENTITIES"];objects.forEach(o=>{let p=o.points||[],ly=o.layer||"0";if(o.type==="line"||o.type==="dimension"){if(p.length<2)return;out.push("0","LINE","8",ly,"10",p[0].x,"20",p[0].y,"30","0","11",p[1].x,"21",p[1].y,"31","0")}else if(o.type==="circle"&&p.length>1){out.push("0","CIRCLE","8",ly,"10",p[0].x,"20",p[0].y,"30","0","40",dist(p[0],p[1]))}else if(["polyline","rectangle"].includes(o.type)&&p.length>1){out.push("0","LWPOLYLINE","8",ly,"90",p.length,"70",o.closed||o.type==="rectangle"?"1":"0");p.forEach(q=>out.push("10",q.x,"20",q.y))}else if(o.type==="text"&&p.length){out.push("0","TEXT","8",ly,"10",p[0].x,"20",p[0].y,"30","0","40",o.height||.5,"1",o.text||"Text")}});out.push("0","ENDSEC","0","EOF");let blob=new Blob([out.join("\r\n")],{type:"application/dxf"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rafiq-land-survey.dxf";a.click();URL.revokeObjectURL(a.href);toast("DXF exported (basic entities)") }
-$("exportBtn").onclick=dxf;
-$("menuBtn").onclick=()=>{let choice=prompt("Type: PDF / JSON / PRINT / ABOUT","PDF");if(!choice)return;choice=choice.toUpperCase();if(choice==="PDF"||choice==="PRINT"){window.print()}else if(choice==="JSON"){let blob=new Blob([JSON.stringify(project(),null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rafiq-drawing.json";a.click();URL.revokeObjectURL(a.href)}else alert("RAFIQ LAND SURVEY CAD · Version 0.1 · New independent project")};
+$("fitBtn").onclick=()=>{if(!objects.length){view={x:canvas.clientWidth/2,y:canvas.clientHeight/2,scale:35};draw();return}let p=objects.flatMap(o=>o.points||[]),xs=p.map(v=>v.x),ys=p.map(v=>v.y),mnx=Math.min(...xs),mxx=Math.max(...xs),mny=Math.min(...ys),mxy=Math.max(...ys);view.scale=Math.max(3,Math.min(180,Math.min((canvas.clientWidth-80)/(mxx-mnx||1),(canvas.clientHeight-80)/(mxy-mny||1))));view.x=canvas.clientWidth/2-(mnx+mxx)/2*view.scale;view.y=canvas.clientHeight/2-(mny+mxy)/2*view.scale;draw()};
+function project(){return{app:"RAFIQ LAND SURVEY CAD",version:"0.3",unit,objects}}
+function saveLocal(){localStorage.setItem("rafiqCadDrawing",JSON.stringify(project()));toast("Saved on this device")}
+$("saveBtn").onclick=saveLocal;$("newBtn").onclick=()=>{if(objects.length&&!confirm("Start a new drawing?"))return;saveState();objects=[];selected=-1;draft=null;draw()};$("openBtn").onclick=()=>$("fileInput").click();
+$("fileInput").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let d=JSON.parse(await f.text());if(!Array.isArray(d.objects))throw 0;saveState();objects=d.objects;unit=d.unit||"m";$("unit").value=unit;selected=-1;$("fitBtn").click();toast("Drawing opened")}catch{toast("Could not open drawing")}e.target.value=""};
+function dxf(){let o=["0","SECTION","2","HEADER","9","$INSUNITS","70",unit==="ft"?"2":unit==="mm"?"4":"6","0","ENDSEC","0","SECTION","2","ENTITIES"];objects.forEach(v=>{let p=v.points||[],ly=v.layer||"0";if((v.type==="line"||v.type==="dimension")&&p.length>1)o.push("0","LINE","8",ly,"10",p[0].x,"20",p[0].y,"30","0","11",p[1].x,"21",p[1].y,"31","0");else if(v.type==="circle"&&p.length>1)o.push("0","CIRCLE","8",ly,"10",p[0].x,"20",p[0].y,"30","0","40",dist(p[0],p[1]));else if(["polyline","rectangle"].includes(v.type)&&p.length>1){o.push("0","LWPOLYLINE","8",ly,"90",p.length,"70",v.closed||v.type==="rectangle"?"1":"0");p.forEach(q=>o.push("10",q.x,"20",q.y))}else if(v.type==="text"&&p.length)o.push("0","TEXT","8",ly,"10",p[0].x,"20",p[0].y,"30","0","40",v.height||.5,"1",v.text||"Text")});o.push("0","ENDSEC","0","EOF");download(o.join("\r\n"),"rafiq-land-survey.dxf","application/dxf")}
+function download(txt,name,type){let a=document.createElement("a"),u=URL.createObjectURL(new Blob([txt],{type}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+$("exportBtn").onclick=dxf;$("menuBtn").onclick=()=>{let v=(prompt("JSON / PDF / PRINT / ABOUT","PDF")||"").toUpperCase();if(v==="JSON")download(JSON.stringify(project(),null,2),"rafiq-drawing.json","application/json");else if(v==="PDF"||v==="PRINT")print();else if(v==="ABOUT")alert("RAFIQ LAND SURVEY CAD · V0.3")};
+function addLayer(){let n=(prompt("New layer name:")||"").trim();if(!n)return;let s=$("layerSelect");if([...s.options].some(o=>o.value===n)){toast("Layer exists");return}let o=document.createElement("option");o.value=o.textContent=n;s.add(o);s.value=n;layer=n}
+function selectedObj(){if(selected<0||!objects[selected]){toast("Select an object first");return null}return objects[selected]}
+$("addLayerBtn").onclick=addLayer;
+$("copyBtn").onclick=()=>{let o=selectedObj();if(!o)return;let dx=+(prompt("Copy X distance","1")||0),dy=+(prompt("Copy Y distance","1")||0);if(!Number.isFinite(dx)||!Number.isFinite(dy))return;saveState();let n=clone(o);n.points=n.points.map(p=>({x:p.x+dx,y:p.y+dy}));objects.push(n);selected=objects.length-1;draw();toast("Copy created")};
+$("rotateBtn").onclick=()=>{let o=selectedObj();if(!o)return;let d=+(prompt("Rotation angle (degrees)","90")||0);if(!Number.isFinite(d))return;let p=o.points,cx=p.reduce((s,v)=>s+v.x,0)/p.length,cy=p.reduce((s,v)=>s+v.y,0)/p.length,r=d*Math.PI/180;saveState();o.points=p.map(v=>{let x=v.x-cx,y=v.y-cy;return{x:cx+x*Math.cos(r)-y*Math.sin(r),y:cy+x*Math.sin(r)+y*Math.cos(r)}});draw();toast("Rotated")};
+$("mirrorBtn").onclick=()=>{let o=selectedObj();if(!o)return;let ax=(prompt("Mirror axis H(horizontal) / V(vertical)","H")||"H").toUpperCase();if(!["H","V"].includes(ax))return;let p=o.points,cx=p.reduce((s,v)=>s+v.x,0)/p.length,cy=p.reduce((s,v)=>s+v.y,0)/p.length;saveState();o.points=p.map(v=>ax==="H"?{x:v.x,y:2*cy-v.y}:{x:2*cx-v.x,y:v.y});draw();toast("Mirror complete")};
+$("offsetBtn").onclick=()=>{let o=selectedObj();if(!o||!["polyline","rectangle"].includes(o.type)){toast("Select a closed polyline or rectangle");return}let d=+(prompt("Offset distance","1")||0);if(!Number.isFinite(d)||!d)return;let p=o.points,sgn=area(p)>0?1:-1;saveState();let q=p.map((v,i)=>{let a=p[(i+p.length-1)%p.length],b=p[(i+1)%p.length],n1={x:-(v.y-a.y),y:v.x-a.x},n2={x:-(b.y-v.y),y:b.x-v.x},l1=Math.hypot(n1.x,n1.y)||1,l2=Math.hypot(n2.x,n2.y)||1,nx=sgn*(n1.x/l1+n2.x/l2),ny=sgn*(n1.y/l1+n2.y/l2),l=Math.hypot(nx,ny)||1;return{x:v.x+d*nx/l,y:v.y+d*ny/l}});let n=clone(o);n.points=q;objects.push(n);selected=objects.length-1;draw();toast("Offset copy created")};
+function cross(a,b,c,d){let den=(a.x-b.x)*(c.y-d.y)-(a.y-b.y)*(c.x-d.x);if(Math.abs(den)<1e-9)return null;let t=((a.x-c.x)*(c.y-d.y)-(a.y-c.y)*(c.x-d.x))/den,u=-((a.x-b.x)*(a.y-c.y)-(a.y-b.y)*(a.x-c.x))/den;if(t<0||t>1||u<0||u>1)return null;return{x:a.x+t*(b.x-a.x),y:a.y+t*(b.y-a.y),t}}
+function trimExtend(mode){let o=selectedObj();if(!o||o.type!=="line"||o.points.length<2){toast("Select a LINE object first");return}let end=(prompt("Endpoint A or B?","B")||"B").toUpperCase()==="A"?0:1,p=o.points,base=p[end],other=p[1-end],hits=[];objects.forEach((v,i)=>{if(i!==selected)segments(v).forEach(s=>{let h=cross(base,other,s[0],s[1]);if(h)hits.push(h)})});if(!hits.length){toast("No boundary intersection found");return}hits.sort((a,b)=>a.t-b.t);let h=mode==="trim"?hits[hits.length-1]:hits[0];saveState();o.points[end]={x:h.x,y:h.y};draw();toast(mode+" complete")}
+$("trimBtn").onclick=()=>trimExtend("Trim");$("extendBtn").onclick=()=>trimExtend("Extend");
+window.addEventListener("keydown",e=>{if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;if(e.key==="Escape"){draft=null;setTool("select");draw()}if(e.key==="Delete"&&selected>=0){saveState();objects.splice(selected,1);selected=-1;draw()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();saveLocal()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z")$("undoBtn").click();if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y")$("redoBtn").click()});
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});
-let local=localStorage.getItem("rafiqCadDrawing");if(local){try{let p=JSON.parse(local);objects=p.objects||[];unit=p.unit||"m";$("unit").value=unit}catch{}}
+try{let v=JSON.parse(localStorage.getItem("rafiqCadDrawing")||"null");if(v?.objects){objects=v.objects;unit=v.unit||"m";$("unit").value=unit}}catch{}
 window.addEventListener("resize",resize);resize();view.x=canvas.clientWidth/2;view.y=canvas.clientHeight/2;draw();
 })();

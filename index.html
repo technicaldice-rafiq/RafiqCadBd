@@ -1,57 +1,19 @@
 <!doctype html>
-<html lang="bn">
-<head>
+<html lang="bn"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#073b75"><meta name="description" content="RAFIQ LAND SURVEY CAD - Professional CAD and land survey drafting">
 <link rel="manifest" href="manifest.json"><link rel="icon" href="logo.png">
-<title>RAFIQ LAND SURVEY CAD</title><link rel="stylesheet" href="style.css">
-</head>
+<title>RAFIQ LAND SURVEY CAD</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header class="topbar">
-  <img src="logo.png" class="brandlogo" alt="Rafiq logo">
-  <div class="brand"><strong>RAFIQ</strong><b>LAND SURVEY CAD</b><small>Professional CAD & Survey Solution</small></div>
-  <div class="topactions">
-    <button id="newBtn" title="New drawing">＋<span>New</span></button>
-    <button id="openBtn" title="Open drawing">📂<span>Open</span></button>
-    <button id="saveBtn" title="Save drawing">💾<span>Save</span></button>
-    <button id="exportBtn" title="Export DXF">⇩<span>DXF</span></button>
-    <button id="menuBtn" title="More options">⋮</button>
-  </div>
-</header>
-<main>
-  <aside class="leftbar" aria-label="Drawing tools">
-    <button data-tool="select" class="tool active">↖<span>Select</span></button>
-    <button data-tool="line" class="tool">／<span>Line</span></button>
-    <button data-tool="polyline" class="tool">⌁<span>Polyline</span></button>
-    <button data-tool="rectangle" class="tool">▱<span>Rectangle</span></button>
-    <button data-tool="circle" class="tool">◯<span>Circle</span></button>
-    <button data-tool="arc" class="tool">⌒<span>Arc</span></button>
-    <button data-tool="text" class="tool">T<span>Text</span></button>
-    <button data-tool="dimension" class="tool">↔<span>Measure</span></button>
-    <button data-tool="delete" class="tool">⌫<span>Delete</span></button>
-  </aside>
-  <section class="workspace">
-    <div class="canvaswrap"><canvas id="cad"></canvas><div id="hint">Tool: Select · Tap to select, drag to move · Pinch/scroll to zoom</div></div>
-    <footer class="status">
-      <span id="toolStatus">SELECT</span><span id="coord">X: 0.00 · Y: 0.00</span>
-      <label>Unit <select id="unit"><option value="m">Meter</option><option value="ft">Feet</option><option value="mm">Millimeter</option></select></label>
-      <label>Scale <select id="scale"><option>1:1</option><option>1:100</option><option>1:500</option><option>1:1000</option></select></label>
-      <button id="gridBtn">Grid ✓</button><button id="snapBtn">Snap OFF</button><button id="orthoBtn">Ortho OFF</button><button id="undoBtn">↶ Undo</button><button id="redoBtn">↷ Redo</button>
-    </footer>
-  </section>
-  <aside class="rightpanel">
-    <div class="panelhead">DRAWING PROPERTIES</div>
-    <label>Layer<select id="layerSelect"><option>0</option><option>BOUNDARY</option><option>ROAD</option><option>TEXT</option><option>DIMENSION</option></select></label>
-    <label>Color<input type="color" id="color" value="#183b68"></label>
-    <label>Line width<input type="number" id="lineWidth" min="1" max="12" value="2"></label>
-    <div class="panelhead">SELECTED OBJECT</div><div id="selectionInfo">No object selected</div>
-    <div class="panelhead">LAND AREA</div>
-    <div class="area" id="areaInfo">Draw a closed polyline to calculate area.</div>
-    <button class="wide" id="closePolyBtn">Close Polyline</button>
-    <button class="wide secondary" id="fitBtn">Zoom All</button>
-  </aside>
-</main>
-<input type="file" id="fileInput" accept=".json,.rfcad,.dxf" hidden>
-<div id="toast" role="status"></div>
-<script src="app.js"></script>
-</body></html>
+<header class="topbar"><img src="logo.png" class="brandlogo" alt="Rafiq logo">
+<div class="brand"><strong>RAFIQ</strong><b>LAND SURVEY CAD</b><small>Professional CAD & Survey Solution · V0.3</small></div>
+<div class="topactions"><button id="newBtn">＋<span>New</span></button><button id="openBtn">📂<span>Open</span></button><button id="saveBtn">💾<span>Save</span></button><button id="exportBtn">⇩<span>DXF</span></button><button id="menuBtn">⋮</button></div></header>
+<main><aside class="leftbar" aria-label="Drawing tools">
+<button data-tool="select" class="tool active">↖<span>Select</span></button><button data-tool="line" class="tool">／<span>Line</span></button><button data-tool="polyline" class="tool">⌁<span>Polyline</span></button><button data-tool="rectangle" class="tool">▱<span>Rectangle</span></button><button data-tool="circle" class="tool">◯<span>Circle</span></button><button data-tool="arc" class="tool">⌒<span>Arc</span></button><button data-tool="text" class="tool">T<span>Text</span></button><button data-tool="dimension" class="tool">↔<span>Measure</span></button><button data-tool="delete" class="tool">⌫<span>Delete</span></button></aside>
+<section class="workspace"><div class="canvaswrap"><canvas id="cad"></canvas><div id="hint">Select and drag to move · Double-tap/click to finish polyline · Pinch/scroll to zoom</div></div>
+<footer class="status"><span id="toolStatus">SELECT</span><span id="coord">X: 0.00 · Y: 0.00</span><label>Unit <select id="unit"><option value="m">Meter</option><option value="ft">Feet</option><option value="mm">Millimeter</option></select></label><label>Scale <select id="scale"><option>1:1</option><option>1:100</option><option>1:500</option><option>1:1000</option></select></label><button id="gridBtn">Grid ✓</button><button id="snapBtn">Snap OFF</button><button id="orthoBtn">Ortho OFF</button><button id="undoBtn">↶ Undo</button><button id="redoBtn">↷ Redo</button></footer></section>
+<aside class="rightpanel"><div class="panelhead">DRAWING PROPERTIES</div><label>Layer<select id="layerSelect"><option>0</option><option>BOUNDARY</option><option>ROAD</option><option>TEXT</option><option>DIMENSION</option></select></label><label>Color<input type="color" id="color" value="#183b68"></label><label>Line width<input type="number" id="lineWidth" min="1" max="12" value="2"></label>
+<div class="panelhead">SELECTED OBJECT</div><div id="selectionInfo">No object selected</div>
+<div class="panelhead">MODIFY TOOLS · V0.3</div><div class="modifygrid"><button id="trimBtn">Trim</button><button id="extendBtn">Extend</button><button id="offsetBtn">Offset</button><button id="copyBtn">Copy</button><button id="rotateBtn">Rotate</button><button id="mirrorBtn">Mirror</button></div><button class="wide secondary" id="addLayerBtn">＋ Add Layer</button>
+<div class="panelhead">LAND AREA</div><div class="area" id="areaInfo">Draw a closed polyline to calculate area.</div><button class="wide" id="closePolyBtn">Close Polyline</button><button class="wide secondary" id="fitBtn">Zoom All</button></aside></main>
+<input type="file" id="fileInput" accept=".json,.rfcad" hidden><div id="toast" role="status"></div><script src="app.js"></script></body></html>
